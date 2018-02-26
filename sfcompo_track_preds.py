@@ -1,4 +1,4 @@
-#! /usr/bin/env/ python
+#! /usr/bin/env python
 
 from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
@@ -17,17 +17,26 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
     """
     cols = ['r2 Score', 'Explained Variance', 'Negative MAE', 'Negative RMSE']
     idx = ['kNN', 'Ridge', 'SVR']
-    for alg in (knn_init, rr_init, svr_init):
-        r2, exp_var, mae, mse = cross_validate(alg, trainX, Y, scoring=scores, cv=CV)
+    # init/empty the lists
+    knn_scores = []
+    rr_scores = []
+    svr_scores = []
+    for alg in ('knn', 'rr', 'svr'):
+        # get init'd learner
+        if alg == 'knn':
+            alg_pred = knn_init
+        elif alg == 'rr':
+            alg_pred = rr_init
+        else:
+            alg_pred = svr_init
+        
+        r2, exp_var, mae, mse = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
         rmse =-1 * np.sqrt(-1*mse)
+
         score_nums = [r2, exp_var, mae, rmse]
-        # init/empty the lists
-        knn_scores = []
-        rr_scores = []
-        svr_scores = []
-        if alg == knn_init:
+        if alg == 'knn':
             knn_scores = score_nums
-        elif alg == rr_init:
+        elif alg == 'rr':
             rr_scores = score_nums
         else:
             svr_scores = score_nums
@@ -71,9 +80,8 @@ def main():
     several algorithms and saves the predictions and ground truth to a CSV file
     """
 
-
-    pkl_name = './sfcompo_pickles/trainset_nucs_fissact_8dec.pkl'
-    trainXY = pd.read_pickle(pkl_name, compression=None)
+    pkl_name = './sfcompo_pickles/not-scaled_trainset_nucs_fissact_8dec.pkl'
+    trainXY = pd.read_pickle(pkl_name)
     trainX, rY, cY, eY, bY = splitXY(trainXY)
     trainX = scale(trainX)
     
@@ -81,16 +89,20 @@ def main():
     scores = ['r2_score', 'explained_variance_score', 'neg_mean_absolute_error', 'neg_mean_squared_error']
     # The hand-picked numbers are based on the dayman test set validation curves
     k = 13
-    a = 1000
+    a = 100
     g = 0.001
-    c = 1000
+    c = 10000
     # loops through each reactor parameter to do separate predictions
-    for trainY in (cY, eY, bY):
-        if Y == cY:
+    for Y in ('c', 'e', 'b'):
+        trainY = pd.Series()
+        if Y == 'c':
+            trainY = cY
             parameter = 'cooling'
-        elif Y == eY:
+        elif Y == 'e': 
+            trainY = eY
             parameter = 'enrichment'
         else:
+            trainY = bY
             parameter = 'burnup'
         # initialize a learner
         knn_init = KNeighborsRegressor(n_neighbors=k)
