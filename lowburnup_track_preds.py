@@ -1,4 +1,4 @@
-#! /usr/bin/env/ python
+#! /usr/bin/env python
 
 from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
@@ -16,20 +16,29 @@ def errors_and_scores(testY, knn, rr, svr, rxtr_pred):
     """
     cols = ['r2 Score', 'Explained Variance', 'Negative MAE', 'Negative RMSE']
     idx = ['kNN', 'Ridge', 'SVR']
-    for alg_pred in (knn, rr, svr):
+    # init empty lists
+    knn_scores = []
+    rr_scores = []
+    svr_scores = []
+    for alg in ('knn', 'rr', 'svr'):
+        # get pred list
+        if alg == 'knn':
+            alg_pred = knn
+        elif alg == 'rr':
+            alg_pred = rr
+        else:
+            alg_pred = svr
+        
         # 4 calculations of various 'scores':
         r2 = r2_score(testY, alg_pred)
-        exp_var = explained_variance(testY, alg_pred)
+        exp_var = explained_variance_score(testY, alg_pred)
         mae = -1 * mean_absolute_error(testY, alg_pred)
         rmse =-1 * np.sqrt(mean_squared_error(testY, alg_pred))
+        
         scores = [r2, exp_var, mae, rmse]
-        # init/empty the lists
-        knn_scores = []
-        rr_scores = []
-        svr_scores = []
-        if alg_pred == knn:
+        if alg == 'knn':
             knn_scores = scores
-        elif alg_pred == rr:
+        elif alg == 'rr':
             rr_scores = scores
         else:
             svr_scores = scores
@@ -52,19 +61,17 @@ def splitXY(dfXY):
     -------
     dfX : dataframe with only nuclide concentrations for each instance
     rY : dataframe with reactor type for each instance
-    cY : dataframe with cooling time for each instance
     eY : dataframe with fuel enrichment for each instance
     bY : dataframe with fuel burnup for each instance
 
     """
 
-    lbls = ['ReactorType', 'CoolingTime', 'Enrichment', 'Burnup', 'total']
+    lbls = ['ReactorType', 'Enrichment', 'Burnup']
     dfX = dfXY.drop(lbls, axis=1)
     r_dfY = dfXY.loc[:, lbls[0]]
-    c_dfY = dfXY.loc[:, lbls[1]]
-    e_dfY = dfXY.loc[:, lbls[2]]
-    b_dfY = dfXY.loc[:, lbls[3]]
-    return dfX, r_dfY, c_dfY, e_dfY, b_dfY
+    e_dfY = dfXY.loc[:, lbls[1]]
+    b_dfY = dfXY.loc[:, lbls[2]]
+    return dfX, r_dfY, e_dfY, b_dfY
 
 
 def main():
@@ -74,29 +81,29 @@ def main():
     """
 
     pkl_train = './lowburnup_pickles/trainXY_2nov.pkl'
-    trainXY = pd.read_pickle(pkl_name, compression=None)
-    trainX, rY, cY, eY, bY = splitXY(trainXY)
+    trainXY = pd.read_pickle(pkl_train)
+    trainX, rY, eY, bY = splitXY(trainXY)
     trainX = scale(trainX)
     pkl_test = './lowburnup_pickles/testXY_2nov.pkl'
-    testXY = pd.read_pickle(pkl_name, compression=None)
-    testX, test_rY, test_cY, test_eY, test_bY = splitXY(testXY)
+    testXY = pd.read_pickle(pkl_test)
+    testX, test_rY, test_eY, test_bY = splitXY(testXY)
     
     # Add some auto-optimize-param stuff here but it's a constant for now
     # The hand-picked numbers are based on the dayman test set validation curves
     k = 13
-    a = 1000
+    a = 10000
     g = 0.001
     c = 1000
     # loops through each reactor parameter to do separate predictions
-    for trainY in (cY, eY, bY):
-        testY = pd.DataFrame()
-        if Y == cY:
-            parameter = 'cooling'
-            testY = test_cY
-        elif Y == eY:
+    for Y in ('e', 'b'):
+        trainY = pd.Series()
+        testY = pd.Series()
+        if Y == 'e':
+            trainY = eY
             parameter = 'enrichment'
             testY = test_eY
         else:
+            trainY = bY
             parameter = 'burnup'
             testY = test_bY
         # initialize a learner
@@ -116,7 +123,7 @@ def main():
                                     index=testY.index)
         preds_by_alg.to_csv('lowburn_' + parameter + '_predictions.csv')
         # calculate errors and scores
-        #errors_and_scores(testY, knn, rr, svr, parameter)
+        errors_and_scores(testY, knn, rr, svr, parameter)
     return
 
 if __name__ == "__main__":
