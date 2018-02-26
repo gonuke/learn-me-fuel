@@ -4,7 +4,7 @@ from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
-from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import cross_val_predict, cross_validate
 from sklearn.metrics import r2_score, explained_variance_score, mean_absolute_error, mean_squared_error
 import pandas as pd
 import numpy as np
@@ -30,10 +30,18 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
         else:
             alg_pred = svr_init
         
-        r2, exp_var, mae, mse = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
-        rmse =-1 * np.sqrt(-1*mse)
+        #r2, exp_var, mae, mse = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
+        #rmse =-1 * np.sqrt(-1*mse)
+        cv_info = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
+        df = pd.DataFrame(cv_info)
+        train_mse = df['train_neg_mean_squared_error']
+        test_mse = df['test_neg_mean_squared_error']
+        rmse_calc = lambda x, y : -1 * np.sqrt(-1*x)
+        df['train_neg_rmse'] = rmse_calc 
+        df['test_neg_rmse'] = rmse_calc
+        
 
-        score_nums = [r2, exp_var, mae, rmse]
+        #score_nums = [r2, exp_var, mae, rmse]
         if alg == 'knn':
             knn_scores = score_nums
         elif alg == 'rr':
@@ -86,7 +94,7 @@ def main():
     trainX = scale(trainX)
     
     CV = 5
-    scores = ['r2_score', 'explained_variance_score', 'neg_mean_absolute_error', 'neg_mean_squared_error']
+    scores = ['r2', 'explained_variance', 'neg_mean_absolute_error', 'neg_mean_squared_error']
     # The hand-picked numbers are based on the dayman test set validation curves
     k = 13
     a = 100
@@ -109,15 +117,15 @@ def main():
         rr_init = Ridge(alpha=a)
         svr_init = SVR(gamma=g, C=c)
         # make predictions
-        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
-        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
-        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
-        preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
-                                     'Ridge': rr, 'SVR': svr}, 
-                                    index=trainY.index)
-        preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
+        #knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
+        #rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
+        #svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
+        #preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
+        #                             'Ridge': rr, 'SVR': svr}, 
+        #                            index=trainY.index)
+        #preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
         # calculate errors and scores
-        #errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, parameter, scores, CV)
+        errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, CV)
     return
 
 if __name__ == "__main__":
