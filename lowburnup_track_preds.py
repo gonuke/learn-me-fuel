@@ -1,57 +1,40 @@
 #! /usr/bin/env/ python
 
+from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
-from sklearn.model_selection import cross_val_predict
-from sklearn.preprocessing import scale
+from sklearn.metrics import r2_score, explained_variance_score, mean_absolute_error, mean_squared_error
 import pandas as pd
+import numpy as np
 
-def train_preds(trainX, trainY, testX, testY, knn_init, rr_init, svr_init, rxtr_pred):
+def errors_and_scores(testY, knn, rr, svr, rxtr_pred):
     """
-    Saves csv's with each regression option wrt scoring metric and algorithm
+    Saves csv's with each reactor parameter regression wrt scoring metric and 
+    algorithm
 
     """
-    # Set cross-validation folds
-    CV = 10
-
-    scores = ['r2', 'explained_variance_score', 
-              'neg_mean_absolute_error', 'neg_mean_squared_error'
-              ]
-
-    # fit w data
-    knn_init.fit(trainX, trainY)
-    rr_init.fit(trainX, trainY)
-    svr_init.fit(trainX, trainY)
-    # initialize Series with tracking the testing instances for plotting purposes 
-    knn_scores = testY
-    rr_scores = testY
-    svr_scores = testY
-    for score in scores:
-        # Set cross-validation folds
-        CV = 10
-
-        # kNN
-        # need to check if this predict round can be done before or after saying the type of score, i.e., inside or outside of loop
-        # this predict round needs to track the entire testing set's pred errors
-        # cv predict doesn't take a score, might have to manually calc (via error_of_choice(testY, cv_pred))
-        # any shortcut for fit -> cv pred of textX? -> manual error calc?
-        knn = cross_val_predict(knn_init, trainX, trainY, cv=CV, scoring=score) 
-        knn_score = pd.Series(knn, index=testY.index, name= rxtr_pred + ' knn ' + score)
-        knn_scores = pd.concat(knn_score, axis=1)
-        # Ridge
-        rr = cross_val_predict(rr_init, trainX, trainY, cv=CV, scoring=score) 
-        rr_score = pd.Series(rr, index=testY.index, name= rxtr_pred + ' rr ' + score)
-        rr_scores = pd.concat(rr_score, axis=1)
-        # SVR
-        svr = cross_val_predict(svr_init, trainX, trainY, cv=CV, scoring=score)
-        svr_score = pd.Series(svr, index=testY.index, name= rxtr_pred + ' svr ' + score)
-        svr_scores = pd.concat(svr_score, axis=1)
-    # save dataframe with scores/errors to CSV
-    knn_scores.to_csv('knn_' + rxtr_pred + '.csv')
-    rr_scores.to_csv('rr_' + rxtr_pred + '.csv')
-    svr_scores.to_csv('svr_' + rxtr_pred + '.csv')
-
+    cols = ['r2 Score', 'Explained Variance', 'Negative MAE', 'Negative RMSE']
+    idx = ['kNN', 'Ridge', 'SVR']
+    for alg_pred in (knn, rr, svr):
+        # 4 calculations of various 'scores':
+        r2 = r2_score(testY, alg_pred)
+        exp_var = explained_variance(testY, alg_pred)
+        mae = -1 * mean_absolute_error(testY, alg_pred)
+        rmse =-1 * np.sqrt(mean_squared_error(testY, alg_pred))
+        scores = [r2, exp_var, mae, rmse]
+        # init/empty the lists
+        knn_scores = []
+        rr_scores = []
+        svr_scores = []
+        if alg_pred == knn:
+            knn_scores = scores
+        elif alg_pred == rr:
+            rr_scores = scores
+        else:
+            svr_scores = scores
+    df = pd.DataFrame([knn_scores, rr_scores, svr_scores], index=idx, columns=cols)
+    df.to_csv('lowburn_' + rxtr_pred + '_scores.csv')
     return
 
 def splitXY(dfXY):
@@ -86,27 +69,15 @@ def splitXY(dfXY):
 
 def main():
     """
-    Given training data, this script trains and tracks each prediction 
-
-    Parameters 
-    ---------- 
-    
-    train : group of dataframes that include training data and the three
-            labels 
-    
-    Returns
-    -------
-    burnup : tuples of error metrics for training, testing, and cross validation 
-             errors for all three algorithms
-
+    Given training data, this script trains and tracks each prediction for
+    several algorithms and saves the predictions and ground truth to a CSV file
     """
 
-    pkl_train = 'trainXY_2nov.pkl'
+    pkl_train = './lowburnup_pickles/trainXY_2nov.pkl'
     trainXY = pd.read_pickle(pkl_name, compression=None)
     trainX, rY, cY, eY, bY = splitXY(trainXY)
     trainX = scale(trainX)
-    # getting scores from test set now, not training set 
-    pkl_test = 'testXY_2nov.pkl'
+    pkl_test = './lowburnup_pickles/testXY_2nov.pkl'
     testXY = pd.read_pickle(pkl_name, compression=None)
     testX, test_rY, test_cY, test_eY, test_bY = splitXY(testXY)
     
@@ -116,23 +87,36 @@ def main():
     a = 1000
     g = 0.001
     c = 1000
-
+    # loops through each reactor parameter to do separate predictions
     for trainY in (cY, eY, bY):
-        if trainY == cY:
+        testY = pd.DataFrame()
+        if Y == cY:
             parameter = 'cooling'
             testY = test_cY
-        elif trainY == eY:
+        elif Y == eY:
             parameter = 'enrichment'
             testY = test_eY
         else:
             parameter = 'burnup'
             testY = test_bY
-
+        # initialize a learner
         knn_init = KNeighborsRegressor(n_neighbors=k)
         rr_init = Ridge(alpha=a)
         svr_init = SVR(gamma=g, C=c)
-        train_preds(trainX, trainY, testX, testY, knn_init, rr_init, svr_init, parameter)
-        
+        # fit w data
+        knn_init.fit(trainX, trainY)
+        rr_init.fit(trainX, trainY)
+        svr_init.fit(trainX, trainY)
+        # make predictions
+        knn = knn_init.predict(testX)
+        rr = rr_init.predict(testX)
+        svr = svr_init.predict(testX)
+        preds_by_alg = pd.DataFrame({'TrueY': testY, 'kNN': knn, 
+                                     'Ridge': rr, 'SVR': svr}, 
+                                    index=testY.index)
+        preds_by_alg.to_csv('lowburn_' + parameter + '_predictions.csv')
+        # calculate errors and scores
+        #errors_and_scores(testY, knn, rr, svr, parameter)
     return
 
 if __name__ == "__main__":

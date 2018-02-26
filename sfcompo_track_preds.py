@@ -1,53 +1,38 @@
 #! /usr/bin/env/ python
 
+from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import Ridge
 from sklearn.svm import SVR
 from sklearn.model_selection import cross_val_predict
-from sklearn.preprocessing import scale
+from sklearn.metrics import r2_score, explained_variance_score, mean_absolute_error, mean_squared_error
 import pandas as pd
+import numpy as np
 
-def train_preds(trainX, trainY, knn_init, rr_init, svr_init, rxtr_pred):
+def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores, CV):
     """
-    Saves csv's with each regression option wrt scoring metric and algorithm
+    Saves csv's with each reactor parameter regression wrt scoring metric and 
+    algorithm
 
     """
-    # Set cross-validation folds
-    CV = 10
-
-    scores = ['r2', 'explained_variance_score', 
-              'neg_mean_absolute_error', 'neg_mean_squared_error'
-              ]
-    # fit w data
-    knn_init.fit(trainX, trainY)
-    rr_init.fit(trainX, trainY)
-    svr_init.fit(trainX, trainY)
-    # initialize pandas with tracking the training instances for plotting purposes 
-    knn_scores = trainY
-    rr_scores = trainY
-    svr_scores = trainY
-    for score in scores:
-        # kNN
-        # need to check if this predict round can be done before or after saying the type of score, i.e., inside or outside of loop
-        # this predict round needs to track the entire training set's pred errors
-        # cv predict doesn't take a score, might have to manually calc (via error_of_choice(trainY, cv_pred))
-        # any shortcut for fit -> cv pred -> manual error calc?
-        knn = cross_val_predict(knn_init, trainX, trainY, cv=CV, scoring=score) 
-        knn_score = pd.Series(knn, index=trainY.index, name= rxtr_pred + ' knn ' + score)
-        knn_scores = pd.concat(knn_score, axis=1)
-        # Ridge
-        rr = cross_val_predict(rr_init, trainX, trainY, cv=CV, scoring=score) 
-        rr_score = pd.Series(rr, index=trainY.index, name= rxtr_pred + ' rr ' + score)
-        rr_scores = pd.concat(rr_score, axis=1)
-        # SVR
-        svr = cross_val_predict(svr_init, trainX, trainY, cv=CV, scoring=score)
-        svr_score = pd.Series(svr, index=trainY.index, name= rxtr_pred + ' svr ' + score)
-        svr_scores = pd.concat(svr_score, axis=1)
-    # save dataframe with scores/errors to CSV
-    knn_scores.to_csv('knn_' + rxtr_pred + '.csv')
-    rr_scores.to_csv('rr_' + rxtr_pred + '.csv')
-    svr_scores.to_csv('svr_' + rxtr_pred + '.csv')
-
+    cols = ['r2 Score', 'Explained Variance', 'Negative MAE', 'Negative RMSE']
+    idx = ['kNN', 'Ridge', 'SVR']
+    for alg in (knn_init, rr_init, svr_init):
+        r2, exp_var, mae, mse = cross_validate(alg, trainX, Y, scoring=scores, cv=CV)
+        rmse =-1 * np.sqrt(-1*mse)
+        score_nums = [r2, exp_var, mae, rmse]
+        # init/empty the lists
+        knn_scores = []
+        rr_scores = []
+        svr_scores = []
+        if alg == knn_init:
+            knn_scores = score_nums
+        elif alg == rr_init:
+            rr_scores = score_nums
+        else:
+            svr_scores = score_nums
+    df = pd.DataFrame([knn_scores, rr_scores, svr_scores], index=idx, columns=cols)
+    df.to_csv('sfcompo_' + rxtr_pred + '_scores.csv')
     return
 
 def splitXY(dfXY):
@@ -82,46 +67,45 @@ def splitXY(dfXY):
 
 def main():
     """
-    Given training data, this script trains and tracks each prediction 
-
-    Parameters 
-    ---------- 
-    
-    train : group of dataframes that include training data and the three
-            labels 
-    
-    Returns
-    -------
-    burnup : tuples of error metrics for training, testing, and cross validation 
-             errors for all three algorithms
-
+    Given training data, this script trains and tracks each prediction for
+    several algorithms and saves the predictions and ground truth to a CSV file
     """
 
-    pkl_name = 'trainset_nucs_fissact_8dec.pkl'
+
+    pkl_name = './sfcompo_pickles/trainset_nucs_fissact_8dec.pkl'
     trainXY = pd.read_pickle(pkl_name, compression=None)
     trainX, rY, cY, eY, bY = splitXY(trainXY)
     trainX = scale(trainX)
     
-    # Add some auto-optimize-param stuff here but it's a constant for now
+    CV = 5
+    scores = ['r2_score', 'explained_variance_score', 'neg_mean_absolute_error', 'neg_mean_squared_error']
     # The hand-picked numbers are based on the dayman test set validation curves
     k = 13
     a = 1000
     g = 0.001
     c = 1000
-
+    # loops through each reactor parameter to do separate predictions
     for trainY in (cY, eY, bY):
-        if trainY == cY:
+        if Y == cY:
             parameter = 'cooling'
-        elif trainY == eY:
+        elif Y == eY:
             parameter = 'enrichment'
         else:
             parameter = 'burnup'
-
+        # initialize a learner
         knn_init = KNeighborsRegressor(n_neighbors=k)
         rr_init = Ridge(alpha=a)
         svr_init = SVR(gamma=g, C=c)
-        train_preds(trainX, trainY, knn_init, rr_init, svr_init, parameter)
-        
+        # make predictions
+        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
+        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
+        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
+        preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
+                                     'Ridge': rr, 'SVR': svr}, 
+                                    index=trainY.index)
+        preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
+        # calculate errors and scores
+        #errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, parameter, scores, CV)
     return
 
 if __name__ == "__main__":
