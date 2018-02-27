@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor
@@ -15,8 +15,6 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
     algorithm
 
     """
-    cols = ['r2 Score', 'Explained Variance', 'Negative MAE', 'Negative RMSE']
-    idx = ['kNN', 'Ridge', 'SVR']
     # init/empty the lists
     knn_scores = []
     rr_scores = []
@@ -29,26 +27,24 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
             alg_pred = rr_init
         else:
             alg_pred = svr_init
-        
-        #r2, exp_var, mae, mse = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
-        #rmse =-1 * np.sqrt(-1*mse)
+        # cross valiation to obtain scores
         cv_info = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
         df = pd.DataFrame(cv_info)
+        # to get MSE -> RMSE
         train_mse = df['train_neg_mean_squared_error']
         test_mse = df['test_neg_mean_squared_error']
         rmse_calc = lambda x, y : -1 * np.sqrt(-1*x)
         df['train_neg_rmse'] = rmse_calc 
         df['test_neg_rmse'] = rmse_calc
-        
-
-        #score_nums = [r2, exp_var, mae, rmse]
+        # for concatting since it's finnicky
         if alg == 'knn':
-            knn_scores = score_nums
+            knn_scores = df
         elif alg == 'rr':
-            rr_scores = score_nums
+            rr_scores = df
         else:
-            svr_scores = score_nums
-    df = pd.DataFrame([knn_scores, rr_scores, svr_scores], index=idx, columns=cols)
+            svr_scores = df
+    cv_results = [knn_scores, rr_scores, svr_scores]
+    df = pd.concat(cv_results)
     df.to_csv('sfcompo_' + rxtr_pred + '_scores.csv')
     return
 

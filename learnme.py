@@ -1,4 +1,4 @@
-#! /usr/bin/env/ python
+#! /usr/bin/env python3
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.linear_model import ElasticNet
