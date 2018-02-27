@@ -28,14 +28,11 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
         else:
             alg_pred = svr_init
         # cross valiation to obtain scores
-        cv_info = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV)
+        cv_info = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV, return_train_score=False)
         df = pd.DataFrame(cv_info)
         # to get MSE -> RMSE
-        train_mse = df['train_neg_mean_squared_error']
         test_mse = df['test_neg_mean_squared_error']
-        rmse_calc = lambda x, y : -1 * np.sqrt(-1*x)
-        df['train_neg_rmse'] = rmse_calc 
-        df['test_neg_rmse'] = rmse_calc
+        df['test_neg_rmse'] = lambda x, y : -1 * np.sqrt(-1*x)
         # for concatting since it's finnicky
         if alg == 'knn':
             knn_scores = df
