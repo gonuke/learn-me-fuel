@@ -30,10 +30,11 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
         # cross valiation to obtain scores
         cv_info = cross_validate(alg_pred, trainX, Y, scoring=scores, cv=CV, return_train_score=False)
         df = pd.DataFrame(cv_info)
-        # to get MSE -> RMSE
-        test_mse = df['test_neg_mean_squared_error']
-        rmse = lambda x : -1 * np.sqrt(-1*x)
-        df['test_neg_rmse'] = rmse(test_mse)
+        if rxtr_pred is not 'reactor':
+            # to get MSE -> RMSE
+            test_mse = df['test_neg_mean_squared_error']
+            rmse = lambda x : -1 * np.sqrt(-1*x)
+            df['test_neg_rmse'] = rmse(test_mse)
         # for concatting since it's finnicky
         if alg == 'knn':
             df['algorithm'] = 'knn'
@@ -98,7 +99,7 @@ def main():
     g = 0.001
     c = 10000
     # loops through each reactor parameter to do separate predictions
-    for Y in ('c', 'e', 'b'):
+    for Y in ('c', 'e', 'b', 'r'):
         trainY = pd.Series()
         if Y == 'c':
             trainY = cY
@@ -106,9 +107,13 @@ def main():
         elif Y == 'e': 
             trainY = eY
             parameter = 'enrichment'
-        else:
+        elif Y == 'b':
             trainY = bY
             parameter = 'burnup'
+        else:
+            scores = ['accuracy', 'average_precision']
+            trainY = rY
+            parameter = 'reactor'
         # initialize a learner
         knn_init = KNeighborsRegressor(n_neighbors=k)
         rr_init = Ridge(alpha=a)
