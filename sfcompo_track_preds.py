@@ -32,13 +32,17 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
         df = pd.DataFrame(cv_info)
         # to get MSE -> RMSE
         test_mse = df['test_neg_mean_squared_error']
-        df['test_neg_rmse'] = lambda x, y : -1 * np.sqrt(-1*x)
+        rmse = lambda x : -1 * np.sqrt(-1*x)
+        df['test_neg_rmse'] = rmse(test_mse)
         # for concatting since it's finnicky
         if alg == 'knn':
+            df['algorithm'] = 'knn'
             knn_scores = df
         elif alg == 'rr':
+            df['algorithm'] = 'rr'
             rr_scores = df
         else:
+            df['algorithm'] = 'svr'
             svr_scores = df
     cv_results = [knn_scores, rr_scores, svr_scores]
     df = pd.concat(cv_results)
@@ -110,13 +114,13 @@ def main():
         rr_init = Ridge(alpha=a)
         svr_init = SVR(gamma=g, C=c)
         # make predictions
-        #knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
-        #rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
-        #svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
-        #preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
-        #                             'Ridge': rr, 'SVR': svr}, 
-        #                            index=trainY.index)
-        #preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
+        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
+        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
+        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
+        preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
+                                     'Ridge': rr, 'SVR': svr}, 
+                                    index=trainY.index)
+        preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
         # calculate errors and scores
         errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, CV)
     return
