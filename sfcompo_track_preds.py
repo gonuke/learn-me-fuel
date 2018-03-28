@@ -1,11 +1,10 @@
 #! /usr/bin/env python3
 
 from sklearn.preprocessing import scale
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.linear_model import Ridge
-from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+from sklearn.linear_model import Ridge, RidgeClassifier
+from sklearn.svm import SVR, SVC
 from sklearn.model_selection import cross_val_predict, cross_validate
-from sklearn.metrics import r2_score, explained_variance_score, mean_absolute_error, mean_squared_error
 import pandas as pd
 import numpy as np
 
@@ -101,6 +100,7 @@ def main():
     # loops through each reactor parameter to do separate predictions
     for Y in ('c', 'e', 'b', 'r'):
         trainY = pd.Series()
+        # get param names and set ground truth
         if Y == 'c':
             trainY = cY
             parameter = 'cooling'
@@ -111,20 +111,32 @@ def main():
             trainY = bY
             parameter = 'burnup'
         else:
-            scores = ['accuracy', 'average_precision']
+            scores = ['accuracy', ]
             trainY = rY
             parameter = 'reactor'
+            ####precision = make_scorer(average_precision_score, average='weighted')
+            ####scores = {'accuracy_score' : 'accuracy', 
+            ####          'avg_precision' : precision
+            ####          }
+            #### can't do avg precision without some super crazy work b/c it's multiclass. 
+            #### just balancing classes in the alg init below instead....
+            #### should check if this makes accuracy an OK score in this case
         # initialize a learner
-        knn_init = KNeighborsRegressor(n_neighbors=k)
-        rr_init = Ridge(alpha=a)
-        svr_init = SVR(gamma=g, C=c)
+        if Y is not 'r':
+            knn_init = KNeighborsRegressor(n_neighbors=k, weights='distance')
+            rr_init = Ridge(alpha=a)
+            svr_init = SVR(gamma=g, C=c)
+        else:
+            knn_init = KNeighborsClassifier(n_neighbors=k, weights='distance')
+            rr_init = RidgeClassifier(alpha=a, class_weight='balanced')
+            svr_init = SVC(gamma=g, C=c, class_weight='balanced')
         # make predictions
         knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
         rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
         svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
         preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
                                      'Ridge': rr, 'SVR': svr}, 
-                                    index=trainY.index)
+                                     index=trainY.index)
         preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
         # calculate errors and scores
         errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, CV)
