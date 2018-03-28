@@ -4,7 +4,7 @@ from sklearn.preprocessing import scale
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
 from sklearn.linear_model import Ridge, RidgeClassifier
 from sklearn.svm import SVR, SVC
-from sklearn.model_selection import cross_val_predict, cross_validate
+from sklearn.model_selection import cross_val_predict, cross_validate, KFold, StratifiedKFold
 import pandas as pd
 import numpy as np
 
@@ -85,12 +85,13 @@ def main():
     several algorithms and saves the predictions and ground truth to a CSV file
     """
 
-    pkl_name = './sfcompo_pickles/not-scaled_trainset_nucs_fissact_8dec.pkl'
+    pkl_name = './sfcompo_pickles/not-scaled_trainset_nucs_fiss_8dec.pkl'
     trainXY = pd.read_pickle(pkl_name)
     trainX, rY, cY, eY, bY = splitXY(trainXY)
     trainX = scale(trainX)
     
     CV = 5
+    kfold = KFold(n_splits=CV, shuffle=True)
     scores = ['r2', 'explained_variance', 'neg_mean_absolute_error', 'neg_mean_squared_error']
     # The hand-picked numbers are based on the dayman test set validation curves
     k = 13
@@ -112,6 +113,7 @@ def main():
             parameter = 'burnup'
         else:
             scores = ['accuracy', ]
+            kfold = StratifiedKFold(n_splits=CV, shuffle=True)
             trainY = rY
             parameter = 'reactor'
             ####precision = make_scorer(average_precision_score, average='weighted')
@@ -131,15 +133,15 @@ def main():
             rr_init = RidgeClassifier(alpha=a, class_weight='balanced')
             svr_init = SVC(gamma=g, C=c, class_weight='balanced')
         # make predictions
-        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=CV)
-        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=CV)
-        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=CV)
+        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=kfold)
+        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=kfold)
+        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=kfold)
         preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
                                      'Ridge': rr, 'SVR': svr}, 
                                      index=trainY.index)
         preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
         # calculate errors and scores
-        errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, CV)
+        errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, kfold)
     return
 
 if __name__ == "__main__":
