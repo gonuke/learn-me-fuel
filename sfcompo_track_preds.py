@@ -8,7 +8,7 @@ from sklearn.model_selection import cross_val_predict, cross_validate, KFold, St
 import pandas as pd
 import numpy as np
 
-def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores, CV):
+def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores, CV, subset):
     """
     Saves csv's with each reactor parameter regression wrt scoring metric and 
     algorithm
@@ -46,7 +46,7 @@ def errors_and_scores(trainX, Y, knn_init, rr_init, svr_init, rxtr_pred, scores,
             svr_scores = df
     cv_results = [knn_scores, rr_scores, svr_scores]
     df = pd.concat(cv_results)
-    df.to_csv('sfcompo_' + rxtr_pred + '_scores.csv')
+    df.to_csv('sfcompo_' + subset + rxtr_pred + '_scores.csv')
     return
 
 def splitXY(dfXY):
@@ -85,63 +85,67 @@ def main():
     several algorithms and saves the predictions and ground truth to a CSV file
     """
 
-    pkl_name = './sfcompo_pickles/not-scaled_trainset_nucs_fiss_8dec.pkl'
-    trainXY = pd.read_pickle(pkl_name)
-    trainX, rY, cY, eY, bY = splitXY(trainXY)
-    trainX = scale(trainX)
-    
-    CV = 5
-    kfold = KFold(n_splits=CV, shuffle=True)
-    scores = ['r2', 'explained_variance', 'neg_mean_absolute_error', 'neg_mean_squared_error']
-    # The hand-picked numbers are based on the dayman test set validation curves
-    k = 13
-    a = 100
-    g = 0.001
-    c = 10000
-    # loops through each reactor parameter to do separate predictions
-    for Y in ('c', 'e', 'b', 'r'):
-        trainY = pd.Series()
-        # get param names and set ground truth
-        if Y == 'c':
-            trainY = cY
-            parameter = 'cooling'
-        elif Y == 'e': 
-            trainY = eY
-            parameter = 'enrichment'
-        elif Y == 'b':
-            trainY = bY
-            parameter = 'burnup'
-        else:
-            scores = ['accuracy', ]
-            kfold = StratifiedKFold(n_splits=CV, shuffle=True)
-            trainY = rY
-            parameter = 'reactor'
-            ####precision = make_scorer(average_precision_score, average='weighted')
-            ####scores = {'accuracy_score' : 'accuracy', 
-            ####          'avg_precision' : precision
-            ####          }
-            #### can't do avg precision without some super crazy work b/c it's multiclass. 
-            #### just balancing classes in the alg init below instead....
-            #### should check if this makes accuracy an OK score in this case
-        # initialize a learner
-        if Y is not 'r':
-            knn_init = KNeighborsRegressor(n_neighbors=k, weights='distance')
-            rr_init = Ridge(alpha=a)
-            svr_init = SVR(gamma=g, C=c)
-        else:
-            knn_init = KNeighborsClassifier(n_neighbors=k, weights='distance')
-            rr_init = RidgeClassifier(alpha=a, class_weight='balanced')
-            svr_init = SVC(gamma=g, C=c, class_weight='balanced')
-        # make predictions
-        knn = cross_val_predict(knn_init, trainX, y=trainY, cv=kfold)
-        rr = cross_val_predict(rr_init, trainX, y=trainY, cv=kfold)
-        svr = cross_val_predict(svr_init, trainX, y=trainY, cv=kfold)
-        preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
-                                     'Ridge': rr, 'SVR': svr}, 
-                                     index=trainY.index)
-        preds_by_alg.to_csv('sfcompo_' + parameter + '_predictions.csv')
-        # calculate errors and scores
-        errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, kfold)
+    pkl1 = './sfcompo_pickles/not-scaled_trainset_nucs_fiss_8dec.pkl'
+    pkl2 = './sfcompo_pickles/not-scaled_trainset_nucs_act_8dec.pkl'
+    pkl3 = './sfcompo_pickles/not-scaled_trainset_nucs_fissact_8dec.pkl'
+    pkl_dict = {'fiss' : pkl1, 'act' : pkl2, 'fissact' : pkl3}
+    for subset in ('fiss', 'act', 'fissact'):
+        trainXY = pd.read_pickle(pkl_dict[subset])
+        trainX, rY, cY, eY, bY = splitXY(trainXY)
+        trainX = scale(trainX)
+        
+        CV = 5
+        kfold = KFold(n_splits=CV, shuffle=True)
+        scores = ['r2', 'explained_variance', 'neg_mean_absolute_error', 'neg_mean_squared_error']
+        # The hand-picked numbers are based on the dayman test set validation curves
+        k = 13
+        a = 100
+        g = 0.001
+        c = 10000
+        # loops through each reactor parameter to do separate predictions
+        for Y in ('c', 'e', 'b', 'r'):
+            trainY = pd.Series()
+            # get param names and set ground truth
+            if Y == 'c':
+                trainY = cY
+                parameter = 'cooling'
+            elif Y == 'e': 
+                trainY = eY
+                parameter = 'enrichment'
+            elif Y == 'b':
+                trainY = bY
+                parameter = 'burnup'
+            else:
+                scores = ['accuracy', ]
+                kfold = StratifiedKFold(n_splits=CV, shuffle=True)
+                trainY = rY
+                parameter = 'reactor'
+                ####precision = make_scorer(average_precision_score, average='weighted')
+                ####scores = {'accuracy_score' : 'accuracy', 
+                ####          'avg_precision' : precision
+                ####          }
+                #### can't do avg precision without some super crazy work b/c it's multiclass. 
+                #### just balancing classes in the alg init below instead....
+                #### should check if this makes accuracy an OK score in this case
+            # initialize a learner
+            if Y is not 'r':
+                knn_init = KNeighborsRegressor(n_neighbors=k, weights='distance')
+                rr_init = Ridge(alpha=a)
+                svr_init = SVR(gamma=g, C=c)
+            else:
+                knn_init = KNeighborsClassifier(n_neighbors=k, weights='distance')
+                rr_init = RidgeClassifier(alpha=a, class_weight='balanced')
+                svr_init = SVC(gamma=g, C=c, class_weight='balanced')
+            # make predictions
+            knn = cross_val_predict(knn_init, trainX, y=trainY, cv=kfold)
+            rr = cross_val_predict(rr_init, trainX, y=trainY, cv=kfold)
+            svr = cross_val_predict(svr_init, trainX, y=trainY, cv=kfold)
+            preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
+                                         'Ridge': rr, 'SVR': svr}, 
+                                         index=trainY.index)
+            preds_by_alg.to_csv('sfcompo_' + subset + parameter + '_predictions.csv')
+            # calculate errors and scores
+            errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, kfold, subset)
     return
 
 if __name__ == "__main__":
