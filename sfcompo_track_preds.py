@@ -94,7 +94,7 @@ def main():
         trainX, rY, cY, eY, bY = splitXY(trainXY)
         trainX = scale(trainX)
         
-        CV = 5
+        CV = 10
         kfold = KFold(n_splits=CV, shuffle=True)
         scores = ['r2', 'explained_variance', 'neg_mean_absolute_error', 'neg_mean_squared_error']
         # The hand-picked numbers are based on the dayman test set validation curves
@@ -137,13 +137,13 @@ def main():
                 rr_init = RidgeClassifier(alpha=a, class_weight='balanced')
                 svr_init = SVC(gamma=g, C=c, class_weight='balanced')
             # make predictions
-            knn = cross_val_predict(knn_init, trainX, y=trainY, cv=kfold)
-            rr = cross_val_predict(rr_init, trainX, y=trainY, cv=kfold)
-            svr = cross_val_predict(svr_init, trainX, y=trainY, cv=kfold)
-            preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
-                                         'Ridge': rr, 'SVR': svr}, 
-                                         index=trainY.index)
-            preds_by_alg.to_csv('sfcompo_' + subset + parameter + '_predictions.csv')
+            #knn = cross_val_predict(knn_init, trainX, y=trainY, cv=kfold)
+            #rr = cross_val_predict(rr_init, trainX, y=trainY, cv=kfold)
+            #svr = cross_val_predict(svr_init, trainX, y=trainY, cv=kfold)
+            #preds_by_alg = pd.DataFrame({'TrueY': trainY, 'kNN': knn, 
+            #                             'Ridge': rr, 'SVR': svr}, 
+            #                             index=trainY.index)
+            #preds_by_alg.to_csv('sfcompo_' + subset + parameter + '_predictions.csv')
             # calculate errors and scores
             errors_and_scores(trainX, trainY, knn_init, rr_init, svr_init, parameter, scores, kfold, subset)
     return
